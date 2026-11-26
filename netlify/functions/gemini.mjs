@@ -35,16 +35,29 @@ function isRateAllowed(ip) {
 }
 
 export default async (request, context) => {
+  // En Netlify Functions (serverless), process.env es la API oficial para
+  // leer variables con alcance Functions. Nunca devolvemos el valor secreto.
+  const apiKey = String(process.env.GEMINI_API_KEY || '').trim();
+
+  // Diagnóstico seguro: permite comprobar desde el navegador si ESTE deploy
+  // recibió la variable, sin revelar la clave ni fragmentos de ella.
   if (request.method === 'GET') {
-    return json({ ok: true, service: 'olga-gemini-netlify-function' });
+    return json({
+      ok: true,
+      service: 'olga-gemini-netlify-function',
+      geminiKeyConfigured: Boolean(apiKey),
+      keyLookup: 'process.env.GEMINI_API_KEY',
+    });
   }
   if (request.method !== 'POST') {
     return json({ error: 'Método no permitido.' }, 405);
   }
 
-  const apiKey = process.env.GEMINI_API_KEY;
   if (!apiKey) {
-    return json({ error: 'Falta configurar GEMINI_API_KEY en las variables de entorno de Netlify (alcance Functions).' }, 500);
+    return json({
+      error: 'Esta función no recibió GEMINI_API_KEY. Confirmá que la variable esté creada en ESTE sitio Netlify, con alcance Functions, y volvé a publicar un nuevo deploy de Production después de guardarla.',
+      code: 'GEMINI_ENV_MISSING',
+    }, 500);
   }
 
   const ip = context?.ip || request.headers.get('x-nf-client-connection-ip') || '';
