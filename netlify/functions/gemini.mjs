@@ -1,7 +1,10 @@
 const GEMINI_URL = 'https://generativelanguage.googleapis.com/v1beta/interactions';
+const DEFAULT_MODEL = 'gemini-3.8-flash';
 const MAX_BODY_BYTES = 1_000_000;
 const RATE_WINDOW_MS = 60_000;
 const RATE_MAX = 25;
+const POST_TIMEOUT_MS = 42_000; // Netlify sync functions have a 60s ceiling.
+const PROBE_TIMEOUT_MS = 20_000;
 const requestCounts = new Map();
 
 function json(data, status = 200) {
@@ -25,7 +28,6 @@ function isRateAllowed(ip) {
   }
   record.count += 1;
   requestCounts.set(ip, record);
-  // Evita que el mapa crezca indefinidamente en instancias persistentes.
   if (requestCounts.size > 5_000) {
     for (const [key, value] of requestCounts) {
       if (now - value.start > RATE_WINDOW_MS) requestCounts.delete(key);
@@ -34,14 +36,62 @@ function isRateAllowed(ip) {
   return record.count <= RATE_MAX;
 }
 
-export default async (request, context) => {
-  // En Netlify Functions (serverless), process.env es la API oficial para
-  // leer variables con alcance Functions. Nunca devolvemos el valor secreto.
-  const apiKey = String(process.env.GEMINI_API_KEY || '').trim();
+async function callGemini(apiKey, payload, timeoutMs) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  const startedAt = Date.now();
+  try {
+    const upstream = await fetch(GEMINI_URL, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-goog-api-key': apiKey,
+        'Api-Revision': '2026-05-20',
+      },
+      body: JSON.stringify(payload),
+      signal: controller.signal,
+    });
+    // Keep the timeout active until the response body has also been read.
+    const responseText = await upstream.text();
+    return {
+      status: upstream.status,
+      ok: upstream.ok,
+      responseText,
+      elapsedMs: Date.now() - startedAt,
+      contentType: upstream.headers.get('content-type') || 'application/json; charset=utf-8',
+    };
+  } catch (error) {
+    if (error?.name === 'AbortError') {
+      const timeoutError = new Error(`Gemini no respondió dentro de ${Math.round(timeoutMs / 1000)} segundos.`);
+      timeoutError.code = 'GEMINI_UPSTREAM_TIMEOUT';
+      timeoutError.elapsedMs = Date.now() - startedAt;
+      throw timeoutError;
+    }
+    const networkError = new Error('No se pudo conectar con la API de Gemini desde Netlify.');
+    networkError.code = 'GEMINI_UPSTREAM_NETWORK';
+    networkError.detail = String(error?.message || error).slice(0, 300);
+    networkError.elapsedMs = Date.now() - startedAt;
+    throw networkError;
+  } finally {
+    clearTimeout(timer);
+  }
+}
 
-  // Diagnóstico seguro: permite comprobar desde el navegador si ESTE deploy
-  // recibió la variable, sin revelar la clave ni fragmentos de ella.
-  if (request.method === 'GET') {
+function safeGoogleMessage(responseText) {
+  try {
+    const data = JSON.parse(responseText);
+    return String(data?.error?.message || data?.message || 'Google devolvió un error sin mensaje.').slice(0, 900);
+  } catch {
+    return String(responseText || 'Google devolvió una respuesta no JSON.').slice(0, 900);
+  }
+}
+
+export default async (request, context) => {
+  const apiKey = String(process.env.GEMINI_API_KEY || '').trim();
+  const url = new URL(request.url);
+
+  // Health check: confirms the variable exists, but does not call Google.
+  if (request.method === 'GET' && url.searchParams.get('probe') !== '1') {
     return json({
       ok: true,
       service: 'olga-gemini-netlify-function',
@@ -49,15 +99,54 @@ export default async (request, context) => {
       keyLookup: 'process.env.GEMINI_API_KEY',
     });
   }
+
+  if (request.method === 'GET' && url.searchParams.get('probe') === '1') {
+    if (!apiKey) {
+      return json({ ok: false, geminiKeyConfigured: false, error: 'GEMINI_API_KEY no está disponible para esta función.' }, 500);
+    }
+    try {
+      const result = await callGemini(apiKey, {
+        model: DEFAULT_MODEL,
+        input: 'Respondé exactamente: CONEXION OK',
+      }, PROBE_TIMEOUT_MS);
+      if (!result.ok) {
+        return json({
+          ok: false,
+          geminiKeyConfigured: true,
+          geminiReachable: true,
+          upstreamStatus: result.status,
+          elapsedMs: result.elapsedMs,
+          error: safeGoogleMessage(result.responseText),
+        }, 502);
+      }
+      let data = {};
+      try { data = JSON.parse(result.responseText); } catch {}
+      return json({
+        ok: true,
+        geminiKeyConfigured: true,
+        geminiReachable: true,
+        upstreamStatus: result.status,
+        elapsedMs: result.elapsedMs,
+        model: data.model || DEFAULT_MODEL,
+        outputReceived: Boolean(data.output_text || data.steps?.some(step => step.type === 'model_output')),
+      });
+    } catch (error) {
+      return json({
+        ok: false,
+        geminiKeyConfigured: true,
+        geminiReachable: false,
+        code: error.code || 'GEMINI_PROBE_FAILED',
+        elapsedMs: error.elapsedMs || null,
+        error: error.message || 'Falló la prueba de Gemini.',
+      }, 504);
+    }
+  }
+
   if (request.method !== 'POST') {
     return json({ error: 'Método no permitido.' }, 405);
   }
-
   if (!apiKey) {
-    return json({
-      error: 'Esta función no recibió GEMINI_API_KEY. Confirmá que la variable esté creada en ESTE sitio Netlify, con alcance Functions, y volvé a publicar un nuevo deploy de Production después de guardarla.',
-      code: 'GEMINI_ENV_MISSING',
-    }, 500);
+    return json({ error: 'Netlify no entregó GEMINI_API_KEY a esta función.', code: 'GEMINI_ENV_MISSING' }, 500);
   }
 
   const ip = context?.ip || request.headers.get('x-nf-client-connection-ip') || '';
@@ -91,37 +180,22 @@ export default async (request, context) => {
   }
 
   try {
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 55_000);
-    let upstream;
-    try {
-      upstream = await fetch(GEMINI_URL, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'x-goog-api-key': apiKey,
-          'Api-Revision': '2026-05-20',
-        },
-        body: JSON.stringify(payload),
-        signal: controller.signal,
-      });
-    } finally {
-      clearTimeout(timeout);
-    }
-
-    const responseText = await upstream.text();
-    return new Response(responseText, {
-      status: upstream.status,
+    const result = await callGemini(apiKey, payload, POST_TIMEOUT_MS);
+    return new Response(result.responseText, {
+      status: result.status,
       headers: {
-        'Content-Type': upstream.headers.get('content-type') || 'application/json; charset=utf-8',
+        'Content-Type': result.contentType,
         'Cache-Control': 'no-store',
         'X-Content-Type-Options': 'nosniff',
+        'X-Olga-Upstream-Ms': String(result.elapsedMs),
       },
     });
   } catch (error) {
-    const message = error?.name === 'AbortError'
-      ? 'Gemini tardó demasiado en responder. Intentá nuevamente.'
-      : 'No se pudo establecer conexión con Gemini desde el servidor.';
-    return json({ error: message }, 502);
+    return json({
+      error: error.message || 'No se pudo completar la solicitud a Gemini.',
+      code: error.code || 'GEMINI_PROXY_ERROR',
+      elapsedMs: error.elapsedMs || null,
+      detail: error.detail || undefined,
+    }, error.code === 'GEMINI_UPSTREAM_TIMEOUT' ? 504 : 502);
   }
 };
