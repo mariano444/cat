@@ -1,0 +1,53 @@
+OLGA IA — MIGRACIÓN A NETLIFY AI GATEWAY (GEMINI)
+
+POR QUÉ SE CAMBIA
+El diagnóstico de la Function mostró que las llamadas directas a los dos endpoints de Google agotaban el mismo timeout y no devolvían código HTTP. La variable manual estaba presente, así que el siguiente camino es usar Netlify AI Gateway, que enruta la solicitud desde una base URL proporcionada por Netlify en el runtime de Functions.
+
+IMPORTANTE SOBRE COSTOS Y PLAN
+Netlify AI Gateway requiere un plan credit-based compatible y que AI Features esté habilitado en el equipo. Netlify factura el uso en créditos; consultá AI Gateway / Usage antes de ponerlo en producción con tráfico real. No es la misma facturación que Google AI Studio.
+
+PASOS EN NETLIFY
+1. Abrí el equipo y el proyecto de Olga en Netlify.
+2. Revisá que AI Features / AI Gateway esté habilitado para el equipo.
+3. En Environment variables, ELIMINÁ la variable GEMINI_API_KEY que cargaste manualmente. No alcanza con dejarla: Netlify no sobrescribe claves propias y, mientras exista, puede no inyectar las variables de AI Gateway para Gemini.
+4. Revisá que tampoco haya GOOGLE_API_KEY o GOOGLE_VERTEX_BASE_URL definidos manualmente si no los usás para otra integración. Esas variables también pueden impedir la inyección automática de Gemini Gateway.
+5. Publicá nuevamente el proyecto en producción (Deploys → Trigger deploy → Deploy site).
+
+QUÉ DEBE INYECTAR NETLIFY EN LA FUNCTION
+- GEMINI_API_KEY (credencial administrada por AI Gateway)
+- GOOGLE_GEMINI_BASE_URL (base URL de AI Gateway)
+
+No copies esos valores a HTML, no los devuelvas en una respuesta y no los registres en logs.
+
+PUBLICACIÓN
+Subí el contenido de esta carpeta manteniendo la estructura:
+- netlify.toml
+- public/index.html
+- netlify/functions/gemini.mjs
+
+El HTML conserva su llamada POST a /.netlify/functions/gemini. No hace falta cambiar el frontend.
+
+PRUEBA
+Después de publicar:
+A) Abrí /.netlify/functions/gemini
+   Esperado: gatewayConfigured true, gatewayKeyAvailable true, gatewayBaseUrlAvailable true.
+B) Abrí /.netlify/functions/gemini?probe=1
+   Esperado: una respuesta JSON de Gemini (el proxy devuelve el formato adaptado que Olga entiende).
+C) Abrí Olga y usá “Probar conexión Gemini”.
+
+QUÉ CAMBIÓ EN EL PROXY
+- Ya no llama directamente a generativelanguage.googleapis.com.
+- Usa GOOGLE_GEMINI_BASE_URL de Netlify AI Gateway.
+- Traduce el payload/historial del formato Interactions usado por el frontend de Olga al formato Gemini generateContent.
+- Traduce la respuesta y las function calls al formato que el frontend actual espera, preservando las herramientas de catálogo y la ficha del comprador.
+- No devuelve claves ni valores secretos.
+- Timeout de 48 segundos para mantenerse por debajo del límite síncrono documentado de Netlify.
+
+SI gatewayConfigured SIGUE EN false
+- Confirmá que AI Features esté habilitado en el equipo.
+- Confirmá que el plan sea compatible con el esquema de créditos de Netlify AI Gateway.
+- Confirmá que se eliminó GEMINI_API_KEY propia y que no quedaron GOOGLE_API_KEY / GOOGLE_VERTEX_BASE_URL que bloqueen la inyección.
+- Hacé un deploy de producción nuevo.
+
+NOTA HONESTA
+La función y la adaptación se prepararon localmente y se validaron sintácticamente. No se pudo ejecutar un deploy en tu cuenta ni probar el gateway real desde tu proyecto. La prueba final debe hacerse en tu sitio Netlify.
