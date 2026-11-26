@@ -1,0 +1,68 @@
+OLGA IA 5.0 — ASESOR/A COMERCIAL INTELIGENTE CON GEMINI
+======================================================
+
+ARCHIVOS DEL PAQUETE
+- olga_vendedor_gemini_demo.html : tienda demo, vendedor/a configurable, asesoramiento y conexión con Gemini.
+- olga_gemini_proxy.mjs         : proxy Node para que la clave API permanezca del lado del servidor.
+- iniciar_olga_windows.bat      : acceso rápido para iniciar el proxy en Windows.
+
+NOVEDADES DE ESTA VERSIÓN
+- Elegí la identidad del vendedor: mujer o varón. La presentación, el nombre y el saludo se adaptan a la selección.
+- Personalizá el nombre del asesor y elegí entre cuatro estilos: consultivo experto, cercano, dinámico o premium.
+- Gemini trabaja con un método de venta consultiva: identifica la etapa de compra, comprende la necesidad, compara opciones, responde objeciones y propone próximos pasos sin presionar.
+- Nueva ficha temporal del comprador: registra únicamente datos compartidos durante la conversación, como uso, producto/vehículo, presupuesto, forma de pago, anticipo, permuta, localidad, plazo, prioridades y dudas.
+- La ficha se puede reiniciar desde el chat. No se guarda en la base de datos ni se solicita DNI, claves, tarjetas o datos bancarios.
+- La voz intenta elegir una voz en español que coincida con la identidad seleccionada. La disponibilidad depende de las voces instaladas en el navegador/Windows.
+- Gemini conserva las herramientas existentes para buscar, recomendar, comparar, filtrar, consultar stock, abrir fichas y gestionar el carrito.
+
+CONEXIÓN RÁPIDA CON GEMINI (PRUEBA LOCAL)
+1. Creá una API key en https://aistudio.google.com/apikey
+2. Abrí la demo y elegí “Personalizar”.
+3. En “Conexión con Gemini IA”, pegá la clave API.
+4. Mantené el modelo predeterminado gemini-3.8-flash y presioná “Probar conexión Gemini”.
+5. Cuando aparezca “Conexión correcta”, conversá con el asesor o asesora.
+
+La clave directa solo es adecuada para una prueba privada. Una clave introducida en una página web puede ser inspeccionada por quien tenga acceso a ella. No publiques la página con una clave incorporada o visible.
+
+MODO RECOMENDADO: PROXY LOCAL SEGURO
+Requiere Node.js 20 o superior.
+
+Windows:
+- Ejecutá iniciar_olga_windows.bat.
+- Pegá tu GEMINI_API_KEY cuando la consola lo solicite.
+- Abrí http://localhost:8787 en el navegador.
+- En Personalizar > Conexión con Gemini IA, la URL del proxy se completa automáticamente. Dejá vacía la clave API dentro de la página y probá la conexión.
+
+También podés iniciarlo manualmente:
+  set GEMINI_API_KEY=PEGÁ_TU_CLAVE
+  node olga_gemini_proxy.mjs
+
+macOS / Linux:
+  GEMINI_API_KEY="PEGÁ_TU_CLAVE" node ./olga_gemini_proxy.mjs
+
+Luego abrí http://localhost:8787.
+
+ANTES DE PUBLICAR EN INTERNET
+El proxy incluido es una base de desarrollo, no una arquitectura multi-comercio terminada. Para producción añadí autenticación, autorización por comercio/tenant, HTTPS, controles de abuso y cuotas, gestión de secretos del hosting y configuración exacta de ALLOWED_ORIGIN. No registres claves ni información privada de clientes en los logs.
+
+QUÉ SIGUE SI QUERÉS LLEVARLO A PRODUCCIÓN
+- Conectar inventario y datos comerciales reales a Supabase o al sistema del negocio.
+- Guardar las fichas de interesados y conversaciones en una base de datos con consentimiento y políticas de privacidad.
+- Integrar WhatsApp/CRM y derivación a vendedores humanos.
+- Conectar agenda para coordinar visitas, pruebas de manejo o llamadas.
+- Procesar compras, reservas o pagos reales mediante proveedores seguros. Esta demo no lo hace.
+
+DATOS DE DEMOSTRACIÓN
+Los cinco vehículos, sus precios, kilometrajes, colores, stock, especificaciones y fotografías son ejemplos ficticios o referenciales. Reemplazalos por datos reales antes de ofrecerlos a clientes. La demo no realiza cobros, reservas ni compras reales.
+
+LIMITACIONES IMPORTANTES
+- La conexión con Gemini requiere que configures tu propia API key o proxy.
+- La prueba de conexión de Gemini no se ejecutó con una API key real al preparar este paquete.
+- La ficha inteligente se mantiene en memoria durante la sesión actual; no sincroniza entre dispositivos y se pierde al cerrar/recargar la página.
+- La voz depende del soporte del navegador y de las voces en español instaladas. En algunos equipos puede no existir una voz masculina/femenina correspondiente y se utilizará una voz alternativa en español.
+- El carrito y el inventario son locales de demostración, no un sistema de stock compartido.
+
+DOCUMENTACIÓN OFICIAL
+- Modelos Gemini: https://ai.google.dev/gemini-api/docs/models
+- Interactions API / function calling: https://ai.google.dev/gemini-api/docs/get-started
+- API keys: https://aistudio.google.com/apikey
