@@ -1,0 +1,5 @@
+DOCUMENTO OBSOLETO
+
+Esta aplicación ya no utiliza Netlify AI Gateway. Consultá LEEME_NETLIFY_GEMINI.txt para la configuración vigente.
+
+La integración actual sigue el mismo esquema que NEXO: SDK oficial @google/genai y variable secreta GEMINI_API_KEY en Netlify Functions.

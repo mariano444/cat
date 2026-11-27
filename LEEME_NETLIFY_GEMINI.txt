@@ -1,0 +1,45 @@
+OLGA IA — INTEGRACIÓN CON GOOGLE GEMINI (MISMO ESQUEMA QUE NEXO)
+
+QUÉ CAMBIÓ
+- Olga ya no depende de Netlify AI Gateway.
+- La función usa el SDK oficial @google/genai 3.6.1, igual que la integración de NEXO.
+- La API key se lee exclusivamente desde process.env.GEMINI_API_KEY dentro de Netlify Functions.
+- El navegador nunca recibe la clave.
+- Se conservó el contrato que espera el frontend actual: historial, function calls, function results y respuesta en formato Interactions.
+- Se incorporaron hasta 3 intentos con espera exponencial para errores temporales 429, 500, 502, 503 y 504, siguiendo el esquema de NEXO.
+- Se conservan la validación del origen, el límite de solicitudes y el límite de tamaño del cuerpo.
+
+CONFIGURACIÓN DE NETLIFY
+1. Abrí el sitio ieia en Netlify.
+2. Entrá en Project configuration → Environment variables.
+3. Mantené o agregá GEMINI_API_KEY con la misma clave válida de Google AI Studio que utiliza la aplicación NEXO.
+4. Asegurate de que la variable esté disponible para las Netlify Functions (runtime) en el contexto de producción.
+5. No hace falta configurar GOOGLE_GEMINI_BASE_URL, NETLIFY_AI_GATEWAY_KEY ni NETLIFY_AI_GATEWAY_URL.
+6. No elimines GEMINI_API_KEY: ahora Olga la necesita directamente, igual que NEXO.
+7. Ejecutá Deploys → Trigger deploy → Deploy site.
+
+IMPORTANTE SOBRE LAS VARIABLES
+- No pegues GEMINI_API_KEY en public/index.html, netlify.toml, el repositorio ni en el navegador.
+- Si ya tenés GEMINI_API_KEY configurada en el proyecto Netlify, verificá que sea la misma clave de Google que utiliza NEXO y que su scope incluya Functions.
+- Si NEXO y Olga están publicados en sitios Netlify diferentes, cada sitio debe tener configurada la variable secreta GEMINI_API_KEY.
+
+PRUEBAS
+A) Diagnóstico seguro:
+   https://ieia.netlify.app/.netlify/functions/gemini
+   Esperado: ok=true, configured=true, apiKeyAvailable=true, provider="Google Gemini".
+
+B) Prueba real de generación:
+   https://ieia.netlify.app/.netlify/functions/gemini?probe=1
+   Esperado: HTTP 200 y una respuesta breve que contenga CONEXIÓN OK.
+
+C) Prueba desde Olga:
+   Abrí el catálogo, ingresá a la sección de configuración de Olga y elegí “Probar conexión Gemini”.
+   Luego probá una consulta que active una herramienta, por ejemplo: “Buscame los autos familiares y compará dos opciones”.
+
+SI DEVUELVE ERROR
+- HTTP 429: límite temporal de solicitudes/cuota de Google.
+- HTTP 503: el servicio/modelo de Gemini continúa temporalmente no disponible; la función reintenta tres veces.
+- HTTP 502: error de comunicación, rechazo de la solicitud o salida no válida; revisar el objeto diagnostic que devuelve la función.
+- GEMINI_API_KEY_NOT_CONFIGURED: la variable no está visible para la función en el contexto de producción.
+
+La validación local comprueba sintaxis y formato del proyecto. La generación real solo puede confirmarse después de publicar en Netlify con la clave válida.

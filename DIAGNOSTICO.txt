@@ -1,0 +1,21 @@
+ESTADO DE LA CORRECCIÓN
+
+El diagnóstico anterior mostraba GEMINI_API_KEY disponible y GOOGLE_GEMINI_BASE_URL ausente. Eso ocurría porque Olga estaba programada para Netlify AI Gateway, mientras que la otra aplicación funcional (NEXO) usa la API oficial de Google Gemini directamente desde una Netlify Function con GEMINI_API_KEY.
+
+La integración de Olga se cambió para adoptar el mismo esquema de NEXO:
+- SDK oficial @google/genai 3.6.1.
+- Variable secreta GEMINI_API_KEY en el runtime de Netlify Functions.
+- Google Gemini API v1beta generateContent.
+- Hasta tres intentos con espera exponencial ante 429/500/502/503/504.
+- Sin dependencia de GOOGLE_GEMINI_BASE_URL ni de Netlify AI Gateway.
+
+El frontend conserva su contrato anterior de Interactions y el ciclo de function calls/function results, por lo que se mantienen las herramientas del catálogo.
+
+Para validar en producción:
+1. Confirmar que GEMINI_API_KEY esté disponible para Functions en el sitio ieia.
+2. Volver a publicar.
+3. Abrir /.netlify/functions/gemini para revisar configured=true.
+4. Abrir /.netlify/functions/gemini?probe=1 para ejecutar una generación real.
+5. Probar el botón “Probar conexión Gemini” y una consulta con herramientas.
+
+No se muestran ni se registran los valores de claves. La generación real debe comprobarse en el sitio después del deploy.

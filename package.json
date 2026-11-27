@@ -1,0 +1,12 @@
+{
+  "name": "olga-catalog-ai",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "node -e \"console.log('Olga: sitio estático en public/; Netlify Functions se empaquetan durante el deploy.')\""
+  },
+  "dependencies": {
+    "@google/genai": "3.6.1"
+  }
+}
