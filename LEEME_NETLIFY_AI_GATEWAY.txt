@@ -1,0 +1,43 @@
+OLGA IA — CORRECCIÓN DEL ERROR 503 DE GEMINI
+
+DIAGNÓSTICO CONFIRMADO EN PRODUCCIÓN
+Se consultó el endpoint de estado del sitio ieia.netlify.app. La Function existe y responde, pero reporta:
+- GEMINI_API_KEY: disponible
+- GOOGLE_GEMINI_BASE_URL: no disponible
+Esto explica el HTTP 503: la Function tiene una credencial, pero no la URL del Gateway para realizar la solicitud.
+
+POR QUÉ PUEDE PASAR
+Netlify inyecta GEMINI_API_KEY y GOOGLE_GEMINI_BASE_URL como un par para AI Gateway. No sobrescribe variables definidas manualmente. Además, GOOGLE_API_KEY o GOOGLE_VERTEX_BASE_URL pueden impedir la inyección automática de las variables Gemini.
+
+PASOS PARA CORREGIRLO EN NETLIFY
+1. Abrí Netlify → equipo → proyecto ieia → Site configuration → Environment variables.
+2. Revisá las variables tanto a nivel proyecto como equipo y sus scopes. Para usar el AI Gateway automático en esta Function, eliminá las variables manuales que interfieren, si existen:
+   - GEMINI_API_KEY
+   - GOOGLE_GEMINI_BASE_URL
+   - GOOGLE_API_KEY
+   - GOOGLE_VERTEX_BASE_URL
+   No pegues claves en el HTML ni en archivos del repositorio.
+3. Verificá que AI Features / AI Gateway esté habilitado para el equipo y que el plan sea compatible con AI Gateway (planes basados en créditos).
+4. El proyecto debe tener al menos un deploy de producción. Después de cambiar las variables, ejecutá Deploys → Trigger deploy → Deploy site.
+
+IMPORTANTE
+No inventes ni cargues manualmente una URL para GOOGLE_GEMINI_BASE_URL. Netlify debe inyectar la URL correcta del Gateway junto con la clave. Si necesitás usar una clave propia de Google en lugar del Gateway, debe configurarse como una integración directa completa y no mezclarse con las variables administradas por AI Gateway; el diagnóstico anterior reportó timeouts en las llamadas directas, por lo que este proyecto conserva la ruta de AI Gateway.
+
+CÓMO VERIFICAR
+A) Abrí https://ieia.netlify.app/.netlify/functions/gemini
+   Esperado: gatewayConfigured=true, gatewayKeyAvailable=true y gatewayBaseUrlAvailable=true.
+   También informa únicamente booleanos de diagnóstico; nunca devuelve claves ni URLs privadas.
+B) Abrí https://ieia.netlify.app/.netlify/functions/gemini?probe=1
+   Esperado: HTTP 200 con la respuesta de prueba de Gemini.
+C) Entrá a Olga y usá “Probar conexión Gemini”.
+
+CAMBIOS EN ESTA VERSIÓN
+- Diagnóstico de entorno más completo y seguro.
+- Detecta si GOOGLE_API_KEY o GOOGLE_VERTEX_BASE_URL están interfiriendo.
+- El endpoint POST devuelve un mensaje concreto cuando falta la URL del Gateway.
+- No expone valores de claves ni URLs de entorno.
+- Se conserva la traducción de historial, herramientas y respuestas al formato que el frontend actual espera.
+- Se conserva el endpoint público de la Function y la URL automática del frontend.
+
+NOTA
+El código actualizado se validó localmente. No se puede cambiar la configuración privada del equipo/cuenta Netlify desde el ZIP; es necesario aplicar los pasos de variables y volver a publicar.
